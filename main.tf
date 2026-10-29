@@ -12,7 +12,7 @@ terraform {
     bucket  = "acme-health-terraform-state"
     key     = "platform/prod.tfstate"
     region  = "us-east-1"
-    encrypt = false
+    encrypt = true
   }
 }
 
