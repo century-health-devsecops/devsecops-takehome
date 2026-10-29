@@ -52,6 +52,23 @@ variable "site_distribution_arn" {
   description = "ARN of the CloudFront distribution that serves the marketing website."
 }
 
+
+# SECURITY FIX:
+# The deployment pipeline must provide the exact immutable ECR image tag.
+# Use the Git commit SHA so each release can be traced to its source code.
+
+variable "image_tag" {
+  description = "Immutable ECR image tag, preferably the Git commit SHA."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = length(var.image_tag) > 0 && var.image_tag != "latest"
+    error_message = "image_tag must be a non-empty version tag and cannot be latest."
+  }
+}
+
+
 # SECURITY NOTE:
 # This variable has no hardcoded default to prevent accidental credential exposure.
 # The deployment pipeline must retrieve the password from AWS Secrets Manager
