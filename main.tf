@@ -97,21 +97,6 @@ variable "github_branch" {
 }
 
 
-# SECURITY FIX:
-# Reference an existing Secrets Manager secret instead of placing the
-# database password directly in the ECS container environment.
-# Supply the secret ARN through your approved deployment process.
-# Do not create the secret value in Terraform configuration.
-variable "db_password_secret_arn" {
-  description = "ARN of the existing Secrets Manager secret containing the DB password."
-  type        = string
-  nullable    = false
-
-  validation {
-    condition     = can(regex("^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$", var.db_password_secret_arn))
-    error_message = "Provide a valid Secrets Manager secret ARN."
-  }
-}
 
 
 variable "final_snapshot_suffix" {
@@ -125,18 +110,6 @@ variable "final_snapshot_suffix" {
   }
 }
 
-
-# SECURITY NOTE:
-# This variable has no hardcoded default to prevent accidental credential exposure.
-# The deployment pipeline must retrieve the password from AWS Secrets Manager
-# or another approved secret store and supply it securely at deployment time.
-# Do not commit passwords to Git, Terraform variable files, or pipeline logs.
-variable "db_password" {
-  description = "Database password supplied securely at deployment time."
-  type        = string
-  sensitive   = true
-  nullable    = false
-}
 
 # -----------------------------------------------------------------------------
 # Storage
@@ -318,7 +291,7 @@ resource "aws_iam_role_policy" "task_execution_secret" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = var.db_password_secret_arn
+        Resource = aws_db_instance.clinical.master_user_secret[0].secret_arn
       }
     ]
   })
@@ -407,7 +380,7 @@ resource "aws_ecs_task_definition" "document_parser" {
       secrets = [
         {
           name      = "DB_PASSWORD"
-          valueFrom = var.db_password_secret_arn
+          valueFrom = "${aws_db_instance.clinical.master_user_secret[0].secret_arn}:password::"
         }
       ]
       logConfiguration = {
@@ -494,7 +467,9 @@ resource "aws_db_instance" "clinical" {
   instance_class         = "db.m6g.large"
   allocated_storage      = 200
   username               = "acme_admin"
-  manage_master_user_password = true    # Let RDS generate and manage the master password in Secrets Manager.This avoids passing the database password through Terraform variables.
+  # Let RDS generate and manage the master password in Secrets Manager.
+  # This avoids passing the database password through Terraform variables.
+  manage_master_user_password = true
   db_subnet_group_name   = aws_db_subnet_group.clinical.name
   vpc_security_group_ids = [aws_security_group.db.id]
 
