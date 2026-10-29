@@ -310,17 +310,23 @@ resource "aws_security_group" "pipeline" {
   }
 }
 
+# SECURITY FIX:
+# PostgreSQL must not accept connections from every IPv4 address.
+# Permit database connections only from ECS pipeline tasks.
+# Before applying in production, verify all legitimate DB clients
+# and migrate any undocumented consumers to an approved security group.
+
 resource "aws_security_group" "db" {
   name        = "acme-clinical-db"
   description = "Clinical database"
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "Postgres"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Postgres from ECS pipeline tasks only"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.pipeline.id]
   }
 
   egress {
