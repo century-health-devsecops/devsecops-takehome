@@ -134,9 +134,14 @@ resource "aws_s3_bucket_policy" "public_assets" {
 # Audit logging
 # -----------------------------------------------------------------------------
 
+# SECURITY FIX:
+# Audit logs are critical evidence for security investigations and compliance.
+# Prevent Terraform from emptying the bucket as part of bucket destruction.
+# Review retention, access controls, and recovery requirements before rollout.
+
 resource "aws_s3_bucket" "audit_logs" {
   bucket        = "acme-health-audit-logs"
-  force_destroy = true
+  force_destroy = false
 }
 
 resource "aws_s3_bucket_policy" "audit_logs" {
@@ -166,12 +171,17 @@ resource "aws_s3_bucket_policy" "audit_logs" {
   })
 }
 
+# SECURITY FIX:
+# Capture management events across AWS regions to improve detection coverage.
+# Enable log-file validation to help detect modification or deletion of logs.
+# Confirm the trail's event selectors and delivery configuration during review.
+
 resource "aws_cloudtrail" "main" {
   name                          = "acme-trail"
   s3_bucket_name                = aws_s3_bucket.audit_logs.id
   include_global_service_events = true
-  is_multi_region_trail         = false
-  enable_log_file_validation    = false
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
 
   depends_on = [aws_s3_bucket_policy.audit_logs]
 }
