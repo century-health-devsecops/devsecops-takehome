@@ -313,7 +313,7 @@ resource "aws_ecs_task_definition" "document_parser" {
   container_definitions = jsonencode([
     {
       name      = "parser"
-      image     = "${aws_ecr_repository.document_parser.repository_url}:latest"
+      image     = "${aws_ecr_repository.document_parser.repository_url}:${var.image_tag}"
       essential = true
       environment = [
         { name = "DB_HOST", value = aws_db_instance.clinical.address },
