@@ -190,12 +190,20 @@ resource "aws_cloudtrail" "main" {
 # Container platform
 # -----------------------------------------------------------------------------
 
+# SECURITY FIX:
+# Scan container images for known vulnerabilities when they are pushed.
+# Immutable tags prevent an existing version tag from being overwritten.
+#
+# DEPLOYMENT NOTE:
+# Build and push a new image with a unique tag for each release.
+# Review scan findings and define a remediation process for critical findings.
+
 resource "aws_ecr_repository" "document_parser" {
   name                 = "document-parser"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
-    scan_on_push = false
+    scan_on_push = true
   }
 }
 
