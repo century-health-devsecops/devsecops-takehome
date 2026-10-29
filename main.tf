@@ -494,7 +494,7 @@ resource "aws_db_instance" "clinical" {
   instance_class         = "db.m6g.large"
   allocated_storage      = 200
   username               = "acme_admin"
-  password               = var.db_password
+  manage_master_user_password = true    # Let RDS generate and manage the master password in Secrets Manager.This avoids passing the database password through Terraform variables.
   db_subnet_group_name   = aws_db_subnet_group.clinical.name
   vpc_security_group_ids = [aws_security_group.db.id]
 
