@@ -505,24 +505,21 @@ resource "aws_iam_role" "github_deploy" {
 # Removed AdministratorAccess from the GitHub deployment role
 
 # Legacy CI user. Kept until the last two pipelines move to the OIDC role above.
-resource "aws_iam_user" "ci_deployer" {
-  name = "ci-deployer"
-}
 
-resource "aws_iam_user_policy_attachment" "ci_deployer" {
-  user       = aws_iam_user.ci_deployer.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
-}
 
-resource "aws_iam_access_key" "ci_deployer" {
-  user = aws_iam_user.ci_deployer.name
-}
+# SECURITY FIX:
+# Do not create or manage new long-lived IAM access keys for CI/CD.
+# The legacy ci-deployer IAM user, AdministratorAccess attachment,
+# access key resource, and credential outputs have been removed.
+#
+# ROLLOUT REQUIREMENT:
+# Before applying this change in a real AWS account:
+# 1. Identify every pipeline still using ci-deployer.
+# 2. Migrate and test those pipelines using GitHub OIDC.
+# 3. Grant the OIDC role only the deployment permissions it requires.
+# 4. Revoke existing ci-deployer access keys and remove its
+#    AdministratorAccess attachment.
+# 5. Decommission the IAM user after confirming no consumers remain.
+#
+# Do not output, commit, or log access-key secrets.
 
-output "ci_deployer_access_key_id" {
-  value = aws_iam_access_key.ci_deployer.id
-}
-
-output "ci_deployer_secret_access_key" {
-  value     = aws_iam_access_key.ci_deployer.secret
-  sensitive = true
-}
