@@ -97,6 +97,23 @@ variable "github_branch" {
 }
 
 
+# SECURITY FIX:
+# Reference an existing Secrets Manager secret instead of placing the
+# database password directly in the ECS container environment.
+# Supply the secret ARN through your approved deployment process.
+# Do not create the secret value in Terraform configuration.
+variable "db_password_secret_arn" {
+  description = "ARN of the existing Secrets Manager secret containing the DB password."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$", var.db_password_secret_arn))
+    error_message = "Provide a valid Secrets Manager secret ARN."
+  }
+}
+
+
 variable "final_snapshot_suffix" {
   description = "Unique suffix for the RDS final snapshot identifier."
   type        = string
@@ -285,6 +302,29 @@ resource "aws_iam_role_policy_attachment" "task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+
+# SECURITY FIX:
+# ECS retrieves the database password using its execution role.
+# Limit secret access to the one explicitly configured secret ARN.
+# NOTE: If the secret uses a customer-managed KMS key, the execution role may also need narrowly scoped kms:Decrypt permission for that key.
+
+resource "aws_iam_role_policy" "task_execution_secret" {
+  name = "read-database-password"
+  role = aws_iam_role.task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = var.db_password_secret_arn
+      }
+    ]
+  })
+}
+
+
 resource "aws_iam_role" "pipeline_task" {
   name               = "acme-pipeline-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
@@ -355,12 +395,20 @@ resource "aws_ecs_task_definition" "document_parser" {
       name      = "parser"
       image     = "${aws_ecr_repository.document_parser.repository_url}:${var.image_tag}"
       essential = true
-      environment = [
+     environment = [
         { name = "DB_HOST", value = aws_db_instance.clinical.address },
         { name = "DB_USER", value = "acme_admin" },
-        { name = "DB_PASSWORD", value = var.db_password },
-        # DEBUG logs the extracted text of every page, which makes OCR issues easy to troubleshoot.
-        { name = "LOG_LEVEL", value = "DEBUG" },
+        { name = "LOG_LEVEL", value = "INFO" }
+      ]
+
+      # ECS retrieves this secret at task startup.
+      # The password is no longer declared as a plaintext environment value
+      # in the task definition configuration.
+      secrets = [
+        {
+          name      = "DB_PASSWORD"
+          valueFrom = var.db_password_secret_arn
+        }
       ]
       logConfiguration = {
         logDriver = "awslogs"
