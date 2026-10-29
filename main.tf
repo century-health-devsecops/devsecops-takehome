@@ -68,6 +68,35 @@ variable "image_tag" {
   }
 }
 
+
+# SECURITY FIX:
+# Only the explicitly configured GitHub repository and branch should
+# be allowed to assume the AWS deployment role through GitHub OIDC.
+# Do not use wildcard repository or branch names.
+
+variable "github_repository" {
+  description = "Exact GitHub repository in OWNER/REPO format."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = length(var.github_repository) > 0 && !strcontains(var.github_repository, "*")
+    error_message = "Provide an exact OWNER/REPO name without wildcards."
+  }
+}
+
+variable "github_branch" {
+  description = "Branch permitted to assume the AWS deployment role."
+  type        = string
+  default     = "main"
+
+  validation {
+    condition     = length(var.github_branch) > 0 && !strcontains(var.github_branch, "*")
+    error_message = "Provide an exact branch name without wildcards."
+  }
+}
+
+
 variable "final_snapshot_suffix" {
   description = "Unique suffix for the RDS final snapshot identifier."
   type        = string
@@ -442,6 +471,10 @@ resource "aws_iam_openid_connect_provider" "github" {
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
+
+# SECURITY FIX:
+# Restrict role assumption to one repository and one branch.
+# GitHub OIDC avoids the need for long-lived AWS access keys.
 resource "aws_iam_role" "github_deploy" {
   name = "acme-github-deploy"
 
@@ -449,21 +482,27 @@ resource "aws_iam_role" "github_deploy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
-        Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
-        Action    = "sts:AssumeRoleWithWebIdentity"
+        Effect = "Allow"
+
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+
+        Action = "sts:AssumeRoleWithWebIdentity"
+
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-          StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:acme-health/*"
+
+            # Exact repository and branch; no wildcard access.
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"
           }
         }
       }
     ]
   })
 }
+
 
 resource "aws_iam_role_policy_attachment" "github_deploy" {
   role       = aws_iam_role.github_deploy.name
