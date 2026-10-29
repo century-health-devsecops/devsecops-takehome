@@ -74,38 +74,28 @@ resource "aws_s3_bucket" "raw_landing" {
   bucket = "acme-health-raw-landing"
 }
 
+# It granted access to Principal = "*" and relied on IP address conditions,
+# rather than explicitly identifying and authorizing approved partner identities.
+#
+# IMPACT:
+# Removing this policy also removes the existing partner-access configuration.
+# This is intentional for this security-remediation baseline to prevent
+# unintended access to sensitive clinical documents.
+#
+# FOLLOW-UP REQUIRED:
+# Configure partner uploads separately using approved, least-privilege IAM
+# roles or presigned URLs, scoped to each partner's own incoming/<partner_id>/
+# prefix. Grant only the S3 actions each partner requires.
+# Do not reintroduce a wildcard principal or broad bucket permissions.
+
 resource "aws_s3_bucket_public_access_block" "raw_landing" {
   bucket                  = aws_s3_bucket.raw_landing.id
   block_public_acls       = true
   ignore_public_acls      = true
-  block_public_policy     = false
-  restrict_public_buckets = false
+  block_public_policy     = true
+  restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_policy" "raw_landing" {
-  bucket = aws_s3_bucket.raw_landing.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "PartnerAccess"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
-        Resource = [
-          aws_s3_bucket.raw_landing.arn,
-          "${aws_s3_bucket.raw_landing.arn}/*",
-        ]
-        Condition = {
-          IpAddress = {
-            "aws:SourceIp" = ["198.51.100.0/24", "192.0.2.0/24"]
-          }
-        }
-      }
-    ]
-  })
-}
 
 # Logos and public PDFs for the marketing website, served through CloudFront.
 resource "aws_s3_bucket" "public_assets" {
