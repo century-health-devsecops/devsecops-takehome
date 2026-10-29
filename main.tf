@@ -502,12 +502,7 @@ resource "aws_iam_role" "github_deploy" {
     ]
   })
 }
-
-
-resource "aws_iam_role_policy_attachment" "github_deploy" {
-  role       = aws_iam_role.github_deploy.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
-}
+# Removed AdministratorAccess from the GitHub deployment role
 
 # Legacy CI user. Kept until the last two pipelines move to the OIDC role above.
 resource "aws_iam_user" "ci_deployer" {
