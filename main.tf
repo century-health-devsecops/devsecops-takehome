@@ -472,7 +472,9 @@ resource "aws_security_group" "db" {
 
 resource "aws_db_subnet_group" "clinical" {
   name       = "acme-clinical-db"
-  subnet_ids = var.public_subnet_ids
+  # RDS should use private subnets across at least two Availability Zones.
+  # Verify the supplied subnet IDs are genuinely private before rollout.
+  subnet_ids = var.private_subnet_ids
 }
 
 
