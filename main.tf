@@ -8,6 +8,8 @@ terraform {
     }
   }
 
+# This enables S3 server-side encryption for Terraform state writes. 
+# In a production environment, also verify the bucket's encryption configuration and access controls.
   backend "s3" {
     bucket  = "acme-health-terraform-state"
     key     = "platform/prod.tfstate"
@@ -50,9 +52,16 @@ variable "site_distribution_arn" {
   description = "ARN of the CloudFront distribution that serves the marketing website."
 }
 
+# SECURITY NOTE:
+# This variable has no hardcoded default to prevent accidental credential exposure.
+# The deployment pipeline must retrieve the password from AWS Secrets Manager
+# or another approved secret store and supply it securely at deployment time.
+# Do not commit passwords to Git, Terraform variable files, or pipeline logs.
 variable "db_password" {
-  type    = string
-  default = "Acme-Clinical-2024!"
+  description = "Database password supplied securely at deployment time."
+  type        = string
+  sensitive   = true
+  nullable    = false
 }
 
 # -----------------------------------------------------------------------------
