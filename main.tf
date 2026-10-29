@@ -68,6 +68,17 @@ variable "image_tag" {
   }
 }
 
+variable "final_snapshot_suffix" {
+  description = "Unique suffix for the RDS final snapshot identifier."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = length(var.final_snapshot_suffix) > 0 && can(regex("^[a-zA-Z0-9-]+$", var.final_snapshot_suffix))
+    error_message = "Use a non-empty suffix containing only letters, numbers, and hyphens."
+  }
+}
+
 
 # SECURITY NOTE:
 # This variable has no hardcoded default to prevent accidental credential exposure.
@@ -387,6 +398,16 @@ resource "aws_db_subnet_group" "clinical" {
   subnet_ids = var.public_subnet_ids
 }
 
+
+# SECURITY FIX:
+# Keep the clinical database private, encrypt storage, enable backups,
+# and protect against accidental deletion.
+#
+# ROLLOUT NOTE:
+# Confirm backup retention requirements, encryption/KMS requirements,
+# maintenance windows, and restore procedures before production rollout.
+# A final snapshot is required when Terraform destroys this instance.
+
 resource "aws_db_instance" "clinical" {
   identifier             = "acme-clinical-prod"
   engine                 = "postgres"
@@ -398,12 +419,18 @@ resource "aws_db_instance" "clinical" {
   db_subnet_group_name   = aws_db_subnet_group.clinical.name
   vpc_security_group_ids = [aws_security_group.db.id]
 
-  publicly_accessible     = true
-  storage_encrypted       = false
-  backup_retention_period = 0
-  deletion_protection     = false
-  skip_final_snapshot     = true
+  publicly_accessible     = false
+  storage_encrypted       = true
+  backup_retention_period = 7
+  deletion_protection     = true
+  skip_final_snapshot     = false
+  final_snapshot_identifier = "acme-clinical-prod-final-${var.final_snapshot_suffix}"
+# Supply a unique value when running Terraform, for example: terraform plan -var="final_snapshot_suffix=20261029"
+
+  # Avoid accidental immediate changes during a production rollout.
+  apply_immediately = false
 }
+
 
 # -----------------------------------------------------------------------------
 # CI/CD
