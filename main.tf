@@ -225,34 +225,50 @@ resource "aws_iam_role" "pipeline_task" {
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 
+
+# SECURITY FIX:
+# Apply least privilege to the ECS document parser task role.
+# The parser can list and read only documents in the incoming/ prefix.
+# It cannot administer S3, access arbitrary secrets, or launch arbitrary tasks.
+#
+# PRODUCTION NOTE:
+# Add secret access or ECS task-launch permissions only after confirming
+# the exact secret ARN, task definition ARN, and required IAM role ARNs.
+# Do not restore wildcard permissions to work around an access error.
+
 resource "aws_iam_role_policy" "pipeline_task" {
   name = "pipeline-permissions"
   role = aws_iam_role.pipeline_task.id
 
   policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [
       {
-        Sid      = "DataAccess"
+        Sid      = "ListIncomingDocuments"
         Effect   = "Allow"
-        Action   = ["s3:*"]
-        Resource = "*"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.raw_landing.arn
+
+        Condition = {
+          StringLike = {
+            "s3:prefix" = [
+              "incoming",
+              "incoming/*"
+            ]
+          }
+        }
       },
       {
-        Sid      = "ReadSecrets"
+        Sid      = "ReadIncomingDocuments"
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "*"
-      },
-      {
-        Sid      = "FanOut"
-        Effect   = "Allow"
-        Action   = ["ecs:RunTask", "iam:PassRole"]
-        Resource = "*"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.raw_landing.arn}/incoming/*"
       }
     ]
   })
 }
+
 
 resource "aws_cloudwatch_log_group" "document_parser" {
   name = "/ecs/document-parser"
